@@ -130,7 +130,7 @@ function ensureFonts() {
   if (FONTS_LOADED.current) return;
   FONTS_LOADED.current = true;
   const link = document.createElement("link");
-  link.href = "https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Great+Vibes&family=Caveat:wght@400;700&family=Satisfy&family=Kalam:wght@400;700&family=Sacramento&family=Pacifico&family=Indie+Flower&display=swap";
+  link.href = "https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Great+Vibes&family=Caveat:wght@400;700&family=Satisfy&family=Kalam:wght@400;700&family=Sacramento&family=Pacifico&family=Indie+Flower&family=Pinyon+Script&family=Allura&family=Mr+Dafoe&family=Italianno&display=swap";
   link.rel = "stylesheet";
   document.head.appendChild(link);
 }
@@ -144,6 +144,10 @@ const SIG_FONTS = [
   { f: "'Sacramento'", w: "400", s: 34 },
   { f: "'Pacifico'", w: "400", s: 24 },
   { f: "'Indie Flower'", w: "400", s: 26 },
+  { f: "'Pinyon Script'", w: "400", s: 36 },
+  { f: "'Allura'", w: "400", s: 34 },
+  { f: "'Mr Dafoe'", w: "400", s: 30 },
+  { f: "'Italianno'", w: "400", s: 38 },
 ];
 
 // Signature rendering modes — each produces a visually distinct signature
@@ -160,6 +164,10 @@ const SIG_MODES = [
   "monogram",         // 9: Overlapping initials large
   "surname-only",     // 10: Just surname
   "casual-first",     // 11: Casual first name, relaxed
+  "flourish-end",     // 12: Full name with trailing bezier tail flourish
+  "upward-slant",     // 13: Name arcing upward (optimistic executive style)
+  "compressed-bold",  // 14: Short compressed bold (formal stamp-like)
+  "relaxed-wide",     // 15: Wide airy cursive, slightly drooping
 ];
 
 // ─── SIGNATURE (Canvas — many variations) ────────────────
@@ -221,22 +229,30 @@ function HandwrittenSignature({ name, width = 180, height = 60, styleIndex = 0 }
       case "monogram": sigText = initials; fontSize = baseSize + 14; break;
       case "surname-only": sigText = lastName || firstName; fontSize = baseSize + 5; break;
       case "casual-first": sigText = firstName.toLowerCase(); fontSize = baseSize + 3; break;
+      case "flourish-end": sigText = name; fontSize = baseSize + 1; break;
+      case "upward-slant": sigText = name; fontSize = baseSize; break;
+      case "compressed-bold": sigText = lastName ? `${firstName[0]}${lastName}` : name; fontSize = baseSize + 6; break;
+      case "relaxed-wide": sigText = name; fontSize = baseSize - 1; break;
     }
 
     ctx.fillStyle = ink;
     ctx.strokeStyle = ink;
     ctx.globalAlpha = 0.85 + rng() * 0.1;
 
-    const tilt = (mode === "full-slanted") ? -0.15 - rng() * 0.08 : (rng() - 0.5) * 0.1;
+    const tilt = (mode === "full-slanted" || mode === "compressed-bold") ? -0.18 - rng() * 0.08
+      : (mode === "upward-slant") ? -0.22 - rng() * 0.06
+      : (mode === "relaxed-wide") ? 0.05 + rng() * 0.05
+      : (rng() - 0.5) * 0.1;
     const startX = 10 + rng() * 5;
-    const startY = H * (mode === "monogram" ? 0.65 : 0.58);
+    const startY = H * (mode === "monogram" ? 0.65 : mode === "upward-slant" ? 0.7 : 0.58);
 
     ctx.save();
     ctx.translate(startX, startY);
     ctx.rotate(tilt);
 
+    let totalWidth = 0;
+
     if (mode === "first-initial-big" && parts.length > 0) {
-      // Draw first letter BIG, rest normal size
       ctx.font = `${font.w} ${fontSize + 12}px ${font.f}, cursive`;
       const bigChar = name[0];
       ctx.fillText(bigChar, 0, 0);
@@ -248,8 +264,8 @@ function HandwrittenSignature({ name, width = 180, height = 60, styleIndex = 0 }
         ctx.fillText(name[i], xOff, yJ);
         xOff += ctx.measureText(name[i]).width + (rng() - 0.5) * 1 - 0.3;
       }
+      totalWidth = xOff;
     } else if (mode === "full-tight") {
-      // Compressed letter spacing
       ctx.font = `${font.w} ${fontSize}px ${font.f}, cursive`;
       let xOff = 0;
       for (let i = 0; i < sigText.length; i++) {
@@ -257,57 +273,123 @@ function HandwrittenSignature({ name, width = 180, height = 60, styleIndex = 0 }
         ctx.fillText(sigText[i], xOff, yJ);
         xOff += ctx.measureText(sigText[i]).width - 1.5 - rng() * 1;
       }
+      totalWidth = xOff;
     } else if (mode === "monogram") {
-      // Overlapping initials
       ctx.font = `${font.w} ${fontSize}px ${font.f}, cursive`;
       for (let i = 0; i < sigText.length; i++) {
         ctx.globalAlpha = 0.7 + rng() * 0.2;
         ctx.fillText(sigText[i], i * (fontSize * 0.45), (rng() - 0.5) * 4);
       }
-    } else {
-      // Standard rendering with jitter
+      totalWidth = sigText.length * fontSize * 0.45;
+    } else if (mode === "relaxed-wide") {
+      // Airy wide spacing with gentle sinusoidal baseline
       ctx.font = `${font.w} ${fontSize}px ${font.f}, cursive`;
       let xOff = 0;
       for (let i = 0; i < sigText.length; i++) {
-        const yJ = (rng() - 0.5) * 2.2;
+        const wave = Math.sin(i * 0.55 + rng() * 0.3) * 2.5;
+        const alpha = 0.78 + rng() * 0.16;
+        ctx.globalAlpha = alpha;
+        ctx.fillText(sigText[i], xOff, wave);
+        xOff += ctx.measureText(sigText[i]).width + 1.8 + rng() * 1.2;
+      }
+      totalWidth = xOff;
+    } else if (mode === "compressed-bold") {
+      // Bold, upright, compressed — like a formal stamp signature
+      ctx.font = `900 ${fontSize}px ${font.f}, cursive`;
+      let xOff = 0;
+      for (let i = 0; i < sigText.length; i++) {
+        const yJ = (rng() - 0.5) * 1.2;
+        ctx.fillText(sigText[i], xOff, yJ);
+        xOff += ctx.measureText(sigText[i]).width - 0.8;
+      }
+      totalWidth = xOff;
+    } else if (mode === "upward-slant") {
+      // Each char slightly rises (y decreases) giving an upward arc feel
+      ctx.font = `${font.w} ${fontSize}px ${font.f}, cursive`;
+      let xOff = 0;
+      for (let i = 0; i < sigText.length; i++) {
+        const yJ = -(i * 1.1) + (rng() - 0.5) * 1.5;
+        ctx.fillText(sigText[i], xOff, yJ);
+        xOff += ctx.measureText(sigText[i]).width + (rng() - 0.5) * 1 - 0.2;
+      }
+      totalWidth = xOff;
+    } else if (mode === "flourish-end") {
+      // Full name then a bezier tail flourish at the end
+      ctx.font = `${font.w} ${fontSize}px ${font.f}, cursive`;
+      let xOff = 0;
+      for (let i = 0; i < sigText.length; i++) {
+        const yJ = (rng() - 0.5) * 2;
+        ctx.fillText(sigText[i], xOff, yJ);
+        xOff += ctx.measureText(sigText[i]).width + (rng() - 0.5) * 1.2 - 0.4;
+      }
+      totalWidth = xOff;
+      // Draw trailing bezier flourish
+      ctx.restore();
+      ctx.save();
+      ctx.translate(startX + totalWidth - 4, startY - 2);
+      ctx.rotate(tilt);
+      ctx.globalAlpha = 0.55 + rng() * 0.2;
+      ctx.lineWidth = 0.9 + rng() * 0.7;
+      ctx.strokeStyle = ink;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      const fx1 = 18 + rng() * 14, fy1 = -8 - rng() * 12;
+      const fx2 = 38 + rng() * 20, fy2 = 6 + rng() * 8;
+      const fx3 = 52 + rng() * 16, fy3 = -4 - rng() * 6;
+      ctx.bezierCurveTo(fx1, fy1, fx2, fy2, fx3, fy3);
+      ctx.stroke();
+      totalWidth += fx3;
+    } else {
+      // Standard rendering with per-character jitter + subtle sinusoidal baseline
+      ctx.font = `${font.w} ${fontSize}px ${font.f}, cursive`;
+      let xOff = 0;
+      for (let i = 0; i < sigText.length; i++) {
+        const wave = Math.sin(i * 0.4) * 1.2;
+        const yJ = (rng() - 0.5) * 2.2 + wave;
         ctx.fillText(sigText[i], xOff, yJ);
         xOff += ctx.measureText(sigText[i]).width + (rng() - 0.5) * 1.5 - 0.4;
       }
+      totalWidth = xOff;
     }
     ctx.restore();
 
-    // Underline / flourish variations
+    // Underline / flourish variations (6 styles)
     ctx.globalAlpha = 0.3 + rng() * 0.2;
     ctx.lineWidth = 0.6 + rng() * 0.8;
     ctx.strokeStyle = ink;
-    const tw = ctx.measureText(sigText).width || 100;
+    const tw = totalWidth || 100;
     const ulY = startY + 8 + rng() * 6;
+    const ulEndX = startX + Math.min(tw * 1.05, W - 30);
 
-    if (hash % 4 === 0) {
+    const ulVariant = hash % 6;
+    if (ulVariant === 0) {
       // Straight underline
       ctx.beginPath();
       ctx.moveTo(startX, ulY);
-      ctx.lineTo(startX + Math.min(tw * 1.1, W - 30), ulY + (rng() - 0.5) * 2);
+      ctx.lineTo(ulEndX, ulY + (rng() - 0.5) * 2);
       ctx.stroke();
-    } else if (hash % 4 === 1) {
-      // Wavy underline
+    } else if (ulVariant === 1) {
+      // Wavy underline (quadratic)
       ctx.beginPath();
       ctx.moveTo(startX, ulY);
-      const endX = startX + Math.min(tw * 1.1, W - 30);
-      ctx.quadraticCurveTo((startX + endX) / 2, ulY + 4 + rng() * 4, endX, ulY - 1 + rng() * 3);
+      ctx.quadraticCurveTo((startX + ulEndX) / 2, ulY + 5 + rng() * 4, ulEndX, ulY - 1 + rng() * 3);
       ctx.stroke();
-    } else if (hash % 4 === 2) {
-      // Double short lines
+    } else if (ulVariant === 2) {
+      // Double short parallel lines
+      ctx.beginPath(); ctx.moveTo(startX, ulY); ctx.lineTo(startX + tw * 0.4, ulY + rng() * 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(startX, ulY + 3); ctx.lineTo(startX + tw * 0.3, ulY + 3 + rng() * 2); ctx.stroke();
+    } else if (ulVariant === 3) {
+      // Curving-up tail: line that arcs upward at the end (executive)
       ctx.beginPath();
       ctx.moveTo(startX, ulY);
-      ctx.lineTo(startX + tw * 0.4, ulY + rng() * 2);
+      ctx.bezierCurveTo(startX + tw * 0.5, ulY + 2, ulEndX - 10, ulY + 1, ulEndX + 10, ulY - 8 - rng() * 6);
       ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(startX, ulY + 3);
-      ctx.lineTo(startX + tw * 0.3, ulY + 3 + rng() * 2);
-      ctx.stroke();
+    } else if (ulVariant === 4) {
+      // Cross-bar: short horizontal through the middle of baseline
+      const midX = startX + tw * 0.5;
+      ctx.beginPath(); ctx.moveTo(midX - tw * 0.22, startY + 2); ctx.lineTo(midX + tw * 0.22, startY + 2 + (rng() - 0.5) * 2); ctx.stroke();
     }
-    // else: no underline (25% chance)
+    // ulVariant === 5: no underline (clean)
 
   }, [name, hash, ready, width, height, si]);
 
@@ -459,6 +541,11 @@ const COMPANY_TEMPLATES = [
   { id: "consulting", label: "Consulting (DSS Style)", headerStyle: "logo-left-info-right", dateAlign: "left", addressee: "Dear Sir/Madam", colorScheme: "red-gray", footerStyle: "copyright", signStyle: "yours-sincerely", borderStyle: "none", accentBar: true },
   { id: "medical", label: "Medical/Hospital (Axon Style)", headerStyle: "logo-right-minimal", dateAlign: "left", addressee: "To the Embassy of Australia", colorScheme: "teal-green", footerStyle: "address-bar", signStyle: "doctor-stamp", borderStyle: "none", accentBar: false },
   { id: "foreign-corp", label: "Foreign Corp (Telf AG Style)", headerStyle: "large-logo-center", dateAlign: "left", addressee: "To whom it may concern", colorScheme: "dark-teal", footerStyle: "simple-address", signStyle: "company-seal", borderStyle: "none", accentBar: false },
+  { id: "watermark", label: "Watermark Background", headerStyle: "logo-right", dateAlign: "right", addressee: "To Whomsoever It May Concern", colorScheme: "navy", footerStyle: "registered-office", signStyle: "authorized", borderStyle: "none", accentBar: false, watermark: true },
+  { id: "uae-corp", label: "UAE Company (AR11 Style)", headerStyle: "dark-bar", dateAlign: "right", addressee: "To Whom It May Concern,", colorScheme: "orange-red", footerStyle: "simple-address", signStyle: "sincerely", borderStyle: "none", accentBar: false, cornerDecor: true },
+  { id: "minimal-mnc", label: "MNC Minimal (Dell Style)", headerStyle: "logo-left-gst", dateAlign: "left", addressee: "TO WHOM IT MAY CONCERN", colorScheme: "charcoal", footerStyle: "dual-office", signStyle: "for-behalf", borderStyle: "none", accentBar: false },
+  { id: "embassy-addr", label: "Embassy Addressed (Aviation Style)", headerStyle: "logo-right", dateAlign: "right", addressee: "Dear Sir/Madam", colorScheme: "blue", footerStyle: "none", signStyle: "yours-sincerely", borderStyle: "none", accentBar: false, swoosh: true },
+  { id: "astro-bg", label: "Decorative Background", headerStyle: "center-seal", dateAlign: "left", addressee: "Dear Sir/Madam,", colorScheme: "maroon", footerStyle: "address-bar", signStyle: "sincerely", borderStyle: "none", accentBar: false, decorBg: true },
 ];
 
 const COLOR_SCHEMES = {
@@ -575,7 +662,6 @@ function NOCPreview({ form }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24, borderBottom: `2px solid ${colors.primary}`, paddingBottom: 14 }}>
             <div>
               <div style={{ fontSize: `${fs - 2}pt`, color: "#555", whiteSpace: "pre-line", marginTop: 4, lineHeight: 1.5 }}>{form.companyAddress}</div>
-              {form.companyPhone && <div style={{ fontSize: `${fs - 2}pt`, color: "#555" }}>Tel.: {form.companyPhone}{form.companyEmail ? `, ${form.companyEmail}` : ""}</div>}
             </div>
             <div style={{ flexShrink: 0, marginLeft: 16 }}>{logo()}</div>
           </div>);
@@ -600,7 +686,6 @@ function NOCPreview({ form }) {
           <div style={{ textAlign: "center", marginBottom: 18, borderBottom: `2px double ${colors.primary}`, paddingBottom: 12 }}>
             <div style={{ display: "inline-block", marginBottom: 8 }}>{logo()}</div>
             <div style={{ fontSize: `${fs - 2}pt`, color: "#666", marginTop: 4 }}>{form.companyAddress.replace("\n", " | ")}</div>
-            {form.companyPhone && <div style={{ fontSize: `${fs - 2}pt`, color: "#666" }}>Phone: {form.companyPhone}</div>}
           </div>);
       case "logo-left-gst":
         return (
@@ -636,7 +721,7 @@ function NOCPreview({ form }) {
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 30 }}>
             <div style={{ textAlign: "right" }}>
               <div style={{ marginLeft: "auto" }}>{logo()}</div>
-              <div style={{ fontSize: `${fs - 3}pt`, color: "#888", marginTop: 3 }}>{form.companyEmail} | {form.companyWebsite}</div>
+              {form.companyWebsite && <div style={{ fontSize: `${fs - 3}pt`, color: "#888", marginTop: 3 }}>{form.companyWebsite}</div>}
             </div>
           </div>);
       case "large-logo-center":
@@ -747,7 +832,36 @@ function NOCPreview({ form }) {
 
   return (
     <div style={pageStyle}>
+      {/* Watermark background - company name in large light text */}
+      {tpl.watermark && (
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", pointerEvents: "none", zIndex: 0 }}>
+          <div style={{ fontSize: "120pt", fontWeight: 900, color: colors.primary, opacity: 0.04, transform: "rotate(-30deg)", whiteSpace: "nowrap", letterSpacing: "8px", userSelect: "none" }}>
+            {form.companyName.replace(/\b(Pvt\.?|Private|Ltd\.?|Limited|Pte\.?|Inc\.?|Corp\.?|LLC|LLP|Co\.?)\b/gi, "").trim().split(/\s+/)[0].toUpperCase()}
+          </div>
+        </div>
+      )}
       {tpl.accentBar && tpl.id === "consulting" && (<div style={{ position: "absolute", top: 0, right: 0, bottom: 0, width: 18, background: `linear-gradient(180deg, ${colors.primary}, ${colors.accent})` }} />)}
+      {/* Corner decoration (AR11 style) */}
+      {tpl.cornerDecor && (
+        <div style={{ position: "absolute", top: 0, right: 0, width: "120px", height: "100%", pointerEvents: "none", zIndex: 0, overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: "15%", right: "-30px", width: "200px", height: "200px", border: `2px solid ${colors.primary}`, borderRadius: "50%", opacity: 0.08 }} />
+          <div style={{ position: "absolute", top: "35%", right: "-50px", width: "250px", height: "250px", border: `2px solid ${colors.accent}`, borderRadius: "50%", opacity: 0.06 }} />
+          <div style={{ position: "absolute", top: "55%", right: "-20px", width: "180px", height: "180px", border: `1.5px solid ${colors.primary}`, borderRadius: "50%", opacity: 0.05 }} />
+        </div>
+      )}
+      {/* Diagonal swoosh (Mid Africa Aviation style) */}
+      {tpl.swoosh && (
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, pointerEvents: "none", zIndex: 0, overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: "-20%", right: "-10%", width: "70%", height: "140%", background: `linear-gradient(135deg, transparent 40%, ${colors.primary}08 45%, ${colors.primary}12 50%, transparent 55%)`, transform: "rotate(-15deg)" }} />
+        </div>
+      )}
+      {/* Decorative grid background (PS Astrology style) */}
+      {tpl.decorBg && (
+        <div style={{ position: "absolute", top: "15%", left: "10%", right: "10%", bottom: "15%", pointerEvents: "none", zIndex: 0 }}>
+          <div style={{ width: "100%", height: "100%", border: `1.5px solid ${colors.primary}`, opacity: 0.06, transform: "rotate(45deg)", transformOrigin: "center" }} />
+          <div style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", border: `1.5px solid ${colors.primary}`, opacity: 0.04 }} />
+        </div>
+      )}
       {renderHeader()}
       <div style={{ display: "flex", justifyContent: tpl.dateAlign === "left" ? "flex-start" : "flex-end", marginBottom: 16, marginTop: tpl.headerStyle === "dark-bar" ? 0 : 8 }}><div>{formatDate(form.letterDate)}</div></div>
       <div style={{ textAlign: isEmbassy ? "left" : "center", margin: "24px 0 20px 0" }}>
@@ -776,9 +890,81 @@ const checkStyle = { display: "flex", alignItems: "center", gap: 8, marginBottom
 
 function FormPanel({ form, setForm }) {
   const u = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
-  const [section, setSection] = useState("template");
+  const [section, setSection] = useState("payslip");
+  const [payslipStatus, setPayslipStatus] = useState(""); // "", "parsing", "done", or error message
+  const [parsedFields, setParsedFields] = useState(null);
+
+  const parsePayslip = async (file) => {
+    setPayslipStatus("parsing");
+    setParsedFields(null);
+    try {
+      const base64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(r.result.split(",")[1]);
+        r.onerror = () => rej(new Error("Read failed"));
+        r.readAsDataURL(file);
+      });
+
+      const mediaType = file.type === "application/pdf" ? "application/pdf"
+        : file.type.startsWith("image/") ? file.type : "image/png";
+
+      const response = await fetch("/api/parse-payslip", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ base64, mediaType }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `Server error ${response.status}`);
+
+      const { fields, logoBbox } = data;
+      setParsedFields(fields);
+
+      // Crop logo from image if bbox returned
+      if (logoBbox && logoBbox.width > 0 && mediaType.startsWith("image/")) {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const pad = 5;
+          const sx = (logoBbox.x / 100) * img.width;
+          const sy = (logoBbox.y / 100) * img.height;
+          const sw = (logoBbox.width / 100) * img.width;
+          const sh = (logoBbox.height / 100) * img.height;
+          canvas.width = sw + pad * 2;
+          canvas.height = sh + pad * 2;
+          const ctx = canvas.getContext("2d");
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, sx - pad, sy - pad, sw + pad * 2, sh + pad * 2, 0, 0, canvas.width, canvas.height);
+          setForm(f => ({ ...f, uploadedLogo: canvas.toDataURL("image/png") }));
+        };
+        img.src = `data:${mediaType};base64,${base64}`;
+      }
+
+      // Auto-fill form fields
+      setForm(f => {
+        const u = { ...f };
+        if (fields.employeeName) u.employeeName = fields.employeeName;
+        if (fields.designation) u.designation = fields.designation;
+        if (fields.companyName) u.companyName = fields.companyName;
+        if (fields.companyAddress) u.companyAddress = fields.companyAddress;
+        if (fields.joiningDate) u.joiningDate = fields.joiningDate;
+        if (fields.monthlySalary) u.monthlySalary = fields.monthlySalary;
+        if (fields.annualSalary) u.annualSalary = fields.annualSalary;
+        if (fields.employeeGender) u.employeeGender = fields.employeeGender;
+        if (fields.companyWebsite) u.companyWebsite = fields.companyWebsite;
+        if (fields.companyCIN) u.companyCIN = fields.companyCIN;
+        return u;
+      });
+      setPayslipStatus("done");
+    } catch (err) {
+      console.error("Payslip parse error:", err);
+      setPayslipStatus(err.message || "Unknown error");
+    }
+  };
 
   const sections = [
+    { id: "payslip", label: "Payslip" },
     { id: "template", label: "Template" },
     { id: "company", label: "Company" },
     { id: "employee", label: "Employee" },
@@ -798,6 +984,50 @@ function FormPanel({ form, setForm }) {
         ))}
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px 60px" }}>
+        {section === "payslip" && <>
+          <Field label="Upload Payslip" hint="Upload a payslip (PDF or image) to auto-fill employee name, company, designation, salary, etc. You can override any field manually.">
+            <label style={{ display: "block", padding: "14px 16px", background: "#f0f4ff", border: "2px dashed #93b4f5", borderRadius: 8, textAlign: "center", cursor: "pointer", transition: "all 0.15s" }}>
+              <div style={{ fontSize: 24, marginBottom: 4 }}>📄</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#1e40af" }}>Click to upload payslip</div>
+              <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>PDF, PNG, JPG supported</div>
+              <input type="file" accept=".pdf,image/*" style={{ display: "none" }} onChange={(e) => {
+                const file = e.target.files[0];
+                if (file) parsePayslip(file);
+              }} />
+            </label>
+          </Field>
+          {payslipStatus === "parsing" && (
+            <div style={{ padding: "12px 14px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, fontSize: 13, color: "#92400e", display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⏳</span> Parsing payslip... extracting details...
+            </div>
+          )}
+          {payslipStatus && payslipStatus !== "parsing" && payslipStatus !== "done" && (
+            <div style={{ padding: "12px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, fontSize: 13, color: "#991b1b" }}>
+              Error: {payslipStatus}
+            </div>
+          )}
+          {payslipStatus === "done" && parsedFields && (
+            <div style={{ padding: "12px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, fontSize: 12, color: "#166534" }}>
+              <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 13 }}>✅ Parsed successfully!</div>
+              {parsedFields.hasLogo && <div style={{ marginBottom: 4, color: "#0369a1" }}>🖼 Logo detected and extracted from payslip</div>}
+              {Object.entries(parsedFields).filter(([k,v]) => v && k !== "hasLogo" && k !== "logoPosition").map(([k, v]) => (
+                <div key={k} style={{ marginBottom: 2 }}>
+                  <span style={{ fontWeight: 600, color: "#374151" }}>{k}:</span> {String(v)}
+                </div>
+              ))}
+              <div style={{ marginTop: 8, fontSize: 11, color: "#6b7280" }}>Override any field in Company/Employee tabs — manual entries take priority.</div>
+            </div>
+          )}
+          {!payslipStatus && (
+            <div style={{ padding: "12px 14px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, color: "#6b7280", marginTop: 8 }}>
+              <div style={{ fontWeight: 600, color: "#374151", marginBottom: 4 }}>How it works:</div>
+              <div>1. Upload a payslip (PDF or screenshot)</div>
+              <div>2. AI extracts name, company, designation, salary</div>
+              <div>3. Fields are auto-filled in the form</div>
+              <div>4. You can manually override any field — your edits take priority</div>
+            </div>
+          )}
+        </>}
         {section === "template" && <>
           <Field label="Layout Template"><select value={form.template} onChange={u("template")} style={selectStyle}>{COMPANY_TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</select></Field>
           <Field label="Font"><select value={form.font} onChange={u("font")} style={selectStyle}>{FONTS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select></Field>
@@ -904,7 +1134,7 @@ export default function NOCGenerator() {
       includeReturnClause: Math.random() > 0.3,
       includeVisaPurpose: Math.random() > 0.3,
       addressedTo: ["generic", "generic", "embassy"][Math.floor(Math.random() * 3)],
-      signatureStyle: String(Math.floor(Math.random() * 12)),
+      signatureStyle: String(Math.floor(Math.random() * 16)),
     }));
   }, []);
 
@@ -1044,7 +1274,7 @@ export default function NOCGenerator() {
           <div style={{ width: 32, height: 32, background: "#3b82f6", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontWeight: 800, fontSize: 14 }}>N</div>
           <div>
             <div style={{ color: "#fff", fontWeight: 700, fontSize: 15 }}>NOC Generator</div>
-            <div style={{ color: "#94a3b8", fontSize: 11 }}>10 layouts · Smart logo · 12 signature styles</div>
+            <div style={{ color: "#94a3b8", fontSize: 11 }}>10 layouts · Smart logo · 16 signature styles</div>
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
