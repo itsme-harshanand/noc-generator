@@ -984,50 +984,13 @@ function FormPanel({ form, setForm }) {
         ))}
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px 60px" }}>
-        {section === "payslip" && <>
-          <Field label="Upload Payslip" hint="Upload a payslip (PDF or image) to auto-fill employee name, company, designation, salary, etc. You can override any field manually.">
-            <label style={{ display: "block", padding: "14px 16px", background: "#f0f4ff", border: "2px dashed #93b4f5", borderRadius: 8, textAlign: "center", cursor: "pointer", transition: "all 0.15s" }}>
-              <div style={{ fontSize: 24, marginBottom: 4 }}>📄</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#1e40af" }}>Click to upload payslip</div>
-              <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}>PDF, PNG, JPG supported</div>
-              <input type="file" accept=".pdf,image/*" style={{ display: "none" }} onChange={(e) => {
-                const file = e.target.files[0];
-                if (file) parsePayslip(file);
-              }} />
-            </label>
-          </Field>
-          {payslipStatus === "parsing" && (
-            <div style={{ padding: "12px 14px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, fontSize: 13, color: "#92400e", display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ animation: "spin 1s linear infinite", display: "inline-block" }}>⏳</span> Parsing payslip... extracting details...
-            </div>
-          )}
-          {payslipStatus && payslipStatus !== "parsing" && payslipStatus !== "done" && (
-            <div style={{ padding: "12px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, fontSize: 13, color: "#991b1b" }}>
-              Error: {payslipStatus}
-            </div>
-          )}
-          {payslipStatus === "done" && parsedFields && (
-            <div style={{ padding: "12px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, fontSize: 12, color: "#166534" }}>
-              <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 13 }}>✅ Parsed successfully!</div>
-              {parsedFields.hasLogo && <div style={{ marginBottom: 4, color: "#0369a1" }}>🖼 Logo detected and extracted from payslip</div>}
-              {Object.entries(parsedFields).filter(([k,v]) => v && k !== "hasLogo" && k !== "logoPosition").map(([k, v]) => (
-                <div key={k} style={{ marginBottom: 2 }}>
-                  <span style={{ fontWeight: 600, color: "#374151" }}>{k}:</span> {String(v)}
-                </div>
-              ))}
-              <div style={{ marginTop: 8, fontSize: 11, color: "#6b7280" }}>Override any field in Company/Employee tabs — manual entries take priority.</div>
-            </div>
-          )}
-          {!payslipStatus && (
-            <div style={{ padding: "12px 14px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 8, fontSize: 12, color: "#6b7280", marginTop: 8 }}>
-              <div style={{ fontWeight: 600, color: "#374151", marginBottom: 4 }}>How it works:</div>
-              <div>1. Upload a payslip (PDF or screenshot)</div>
-              <div>2. AI extracts name, company, designation, salary</div>
-              <div>3. Fields are auto-filled in the form</div>
-              <div>4. You can manually override any field — your edits take priority</div>
-            </div>
-          )}
-        </>}
+        {section === "payslip" && (
+          <div style={{ padding: "20px 16px", background: "#f9fafb", border: "1px solid #e5e7eb", borderRadius: 10, textAlign: "center", color: "#6b7280" }}>
+            <div style={{ fontSize: 28, marginBottom: 10 }}>🚧</div>
+            <div style={{ fontWeight: 700, fontSize: 14, color: "#374151", marginBottom: 6 }}>Coming Soon</div>
+            <div style={{ fontSize: 13, lineHeight: 1.6 }}>Please fill in details manually using the <strong>Company</strong> and <strong>Employee</strong> tabs.</div>
+          </div>
+        )}
         {section === "template" && <>
           <Field label="Layout Template"><select value={form.template} onChange={u("template")} style={selectStyle}>{COMPANY_TEMPLATES.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}</select></Field>
           <Field label="Font"><select value={form.font} onChange={u("font")} style={selectStyle}>{FONTS.map(f => <option key={f.id} value={f.id}>{f.label}</option>)}</select></Field>
