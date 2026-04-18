@@ -8,32 +8,23 @@ export default async function handler(req, res) {
   const { base64, mediaType } = req.body || {};
   if (!base64 || !mediaType) return res.status(400).json({ error: "Missing base64 or mediaType" });
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "ANTHROPIC_API_KEY not configured on server" });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured on server" });
 
-  const headers = {
-    "Content-Type": "application/json",
-    "x-api-key": apiKey,
-    "anthropic-version": "2023-06-01",
-  };
+  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
 
-  const contentBlock = mediaType === "application/pdf"
-    ? { type: "document", source: { type: "base64", media_type: mediaType, data: base64 } }
-    : { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } };
+  const filePart = { inlineData: { mimeType: mediaType, data: base64 } };
 
   try {
     // Extract text fields
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await fetch(GEMINI_URL, {
       method: "POST",
-      headers,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 1000,
-        messages: [{
-          role: "user",
-          content: [
-            contentBlock,
-            { type: "text", text: `Extract the following fields from this payslip. Return ONLY a JSON object with these keys (use empty string if not found):
+        contents: [{
+          parts: [
+            filePart,
+            { text: `Extract the following fields from this payslip. Return ONLY a JSON object with these keys (use empty string if not found):
 {
   "employeeName": "",
   "designation": "",
@@ -50,16 +41,17 @@ export default async function handler(req, res) {
 }
 Return ONLY the JSON, no other text.` }
           ]
-        }]
+        }],
+        generationConfig: { maxOutputTokens: 1000, temperature: 0 },
       })
     });
 
     const data = await response.json();
     if (!response.ok) {
-      return res.status(response.status).json({ error: data.error?.message || `Anthropic error ${response.status}` });
+      return res.status(response.status).json({ error: data.error?.message || `Gemini error ${response.status}` });
     }
 
-    const text = data.content?.map(c => c.text || "").join("") || "";
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     const clean = text.replace(/```json|```/g, "").trim();
     const fields = JSON.parse(clean);
 
@@ -67,23 +59,21 @@ Return ONLY the JSON, no other text.` }
     let logoBbox = null;
     if (mediaType.startsWith("image/") && fields.hasLogo) {
       try {
-        const logoRes = await fetch("https://api.anthropic.com/v1/messages", {
+        const logoRes = await fetch(GEMINI_URL, {
           method: "POST",
-          headers,
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "claude-haiku-4-5-20251001",
-            max_tokens: 200,
-            messages: [{
-              role: "user",
-              content: [
-                { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
-                { type: "text", text: `Give me the bounding box of JUST the company logo as percentages of image size. Return ONLY JSON: {"x":0,"y":0,"width":20,"height":10} where x,y are top-left %, width/height are %. Return ONLY JSON.` }
+            contents: [{
+              parts: [
+                filePart,
+                { text: `Give me the bounding box of JUST the company logo as percentages of image size. Return ONLY JSON: {"x":0,"y":0,"width":20,"height":10} where x,y are top-left %, width/height are %. Return ONLY JSON.` }
               ]
-            }]
+            }],
+            generationConfig: { maxOutputTokens: 200, temperature: 0 },
           })
         });
         const logoData = await logoRes.json();
-        const logoText = logoData.content?.map(c => c.text || "").join("") || "";
+        const logoText = logoData.candidates?.[0]?.content?.parts?.[0]?.text || "";
         logoBbox = JSON.parse(logoText.replace(/```json|```/g, "").trim());
       } catch (_) {}
     }
