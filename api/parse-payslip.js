@@ -1,7 +1,7 @@
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 async function gemini(apiKey, body, retries = 2) {
-  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-04-17:generateContent?key=${apiKey}`;
   for (let i = 0; i <= retries; i++) {
     const res = await fetch(url, {
       method: "POST",
