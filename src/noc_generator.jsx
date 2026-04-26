@@ -894,9 +894,13 @@ function FormPanel({ form, setForm }) {
   const [payslipStatus, setPayslipStatus] = useState(""); // "", "parsing", "done", or error message
   const [parsedFields, setParsedFields] = useState(null);
 
+  const [logoSource, setLogoSource] = useState(""); // "payslip" | "website" | "generated"
+
   const parsePayslip = async (file) => {
     setPayslipStatus("parsing");
     setParsedFields(null);
+    setLogoSource("");
+    setForm(f => ({ ...f, uploadedLogo: null })); // clear any old logo
     try {
       const base64 = await new Promise((res, rej) => {
         const r = new FileReader();
@@ -920,8 +924,9 @@ function FormPanel({ form, setForm }) {
       const { fields, logoBbox } = data;
       setParsedFields(fields);
 
-      // Crop logo from image if bbox returned
+      // Logo priority: 1) crop from payslip image  2) website favicon  3) generated
       if (logoBbox && logoBbox.width > 0 && mediaType.startsWith("image/")) {
+        // Extract logo from image payslip
         const img = new Image();
         img.onload = () => {
           const canvas = document.createElement("canvas");
@@ -937,8 +942,15 @@ function FormPanel({ form, setForm }) {
           ctx.fillRect(0, 0, canvas.width, canvas.height);
           ctx.drawImage(img, sx - pad, sy - pad, sw + pad * 2, sh + pad * 2, 0, 0, canvas.width, canvas.height);
           setForm(f => ({ ...f, uploadedLogo: canvas.toDataURL("image/png") }));
+          setLogoSource("payslip");
         };
         img.src = `data:${mediaType};base64,${base64}`;
+      } else if (fields.companyWebsite) {
+        // Will use website favicon via SmartLogo
+        setLogoSource("website");
+      } else {
+        // Will use auto-generated logo via SmartLogo
+        setLogoSource("generated");
       }
 
       // Auto-fill form fields
@@ -1006,6 +1018,11 @@ function FormPanel({ form, setForm }) {
           {payslipStatus === "done" && parsedFields && (
             <div style={{ padding: "12px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, fontSize: 12, color: "#166534" }}>
               <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 13 }}>✅ Parsed successfully!</div>
+              <div style={{ marginBottom: 8, fontSize: 12, color: "#0369a1", background: "#e0f2fe", borderRadius: 5, padding: "4px 8px", display: "inline-block" }}>
+                {logoSource === "payslip" && "🖼 Logo extracted from payslip"}
+                {logoSource === "website" && "🌐 Logo fetched from company website"}
+                {logoSource === "generated" && "✨ Logo auto-generated"}
+              </div>
               {Object.entries(parsedFields).filter(([k, v]) => v && k !== "hasLogo" && k !== "logoPosition").map(([k, v]) => (
                 <div key={k} style={{ marginBottom: 2 }}><span style={{ fontWeight: 600, color: "#374151" }}>{k}:</span> {String(v)}</div>
               ))}
