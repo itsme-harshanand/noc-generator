@@ -19,11 +19,9 @@ async function gemini(apiKey, body, retries = 2) {
 }
 
 function parseJSON(text) {
-  // Extract JSON object from response (handles extra text, markdown blocks)
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("No JSON found in response");
+  if (!match) throw new Error(`No JSON found in response. Gemini said: "${text.substring(0, 300)}"`);
   let json = match[0];
-  // Fix trailing commas before } or ]
   json = json.replace(/,\s*([\]}])/g, "$1");
   return JSON.parse(json);
 }
@@ -70,6 +68,11 @@ Use empty string for missing text fields. hasLogo must be true or false (boolean
     });
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    if (!text) {
+      const reason = data.candidates?.[0]?.finishReason || "unknown";
+      const safety = data.promptFeedback?.blockReason || "";
+      throw new Error(`Gemini returned no text. finishReason: ${reason}${safety ? ", blocked: " + safety : ""}`);
+    }
     const fields = parseJSON(text);
 
     let logoBbox = null;
