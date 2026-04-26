@@ -18,6 +18,16 @@ async function gemini(apiKey, body, retries = 2) {
   }
 }
 
+function parseJSON(text) {
+  // Extract JSON object from response (handles extra text, markdown blocks)
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("No JSON found in response");
+  let json = match[0];
+  // Fix trailing commas before } or ]
+  json = json.replace(/,\s*([\]}])/g, "$1");
+  return JSON.parse(json);
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -38,29 +48,29 @@ export default async function handler(req, res) {
       contents: [{
         parts: [
           filePart,
-          { text: `Extract the following fields from this payslip. Return ONLY a JSON object with these keys (use empty string if not found):
+          { text: `Extract fields from this payslip. Return ONLY valid JSON with exactly these keys:
 {
-  "employeeName": "",
-  "designation": "",
-  "companyName": "",
-  "companyAddress": "",
-  "joiningDate": "",
-  "monthlySalary": "",
-  "annualSalary": "",
-  "employeeGender": "male or female based on name/title",
-  "companyWebsite": "",
+  "employeeName": "John Smith",
+  "designation": "Software Engineer",
+  "companyName": "Acme Corp",
+  "companyAddress": "123 Main St, Mumbai",
+  "joiningDate": "2021-03-15",
+  "monthlySalary": "INR 1,00,000",
+  "annualSalary": "INR 12,00,000",
+  "employeeGender": "male",
+  "companyWebsite": "www.acme.com",
   "companyCIN": "",
-  "hasLogo": true or false,
-  "logoPosition": "top-left, top-center, or top-right. Empty if no logo."
+  "hasLogo": true,
+  "logoPosition": "top-left"
 }
-Return ONLY the JSON, no other text.` }
+Use empty string for missing text fields. hasLogo must be true or false (boolean). Return ONLY the JSON object, no explanation.` }
         ]
       }],
       generationConfig: { maxOutputTokens: 1000, temperature: 0 },
     });
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const fields = JSON.parse(text.replace(/```json|```/g, "").trim());
+    const fields = parseJSON(text);
 
     let logoBbox = null;
     if (mediaType.startsWith("image/") && fields.hasLogo) {
@@ -69,13 +79,13 @@ Return ONLY the JSON, no other text.` }
           contents: [{
             parts: [
               filePart,
-              { text: `Give me the bounding box of JUST the company logo as percentages of image size. Return ONLY JSON: {"x":0,"y":0,"width":20,"height":10} where x,y are top-left %, width/height are %. Return ONLY JSON.` }
+              { text: `Return the bounding box of the company logo as JSON: {"x":5,"y":2,"width":18,"height":8} where values are percentages of image dimensions. Return ONLY the JSON object.` }
             ]
           }],
           generationConfig: { maxOutputTokens: 200, temperature: 0 },
         });
         const logoText = logoData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        logoBbox = JSON.parse(logoText.replace(/```json|```/g, "").trim());
+        logoBbox = parseJSON(logoText);
       } catch (_) {}
     }
 
