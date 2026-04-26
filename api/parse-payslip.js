@@ -1,3 +1,23 @@
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function gemini(apiKey, body, retries = 2) {
+  const url = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+  for (let i = 0; i <= retries; i++) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (res.status === 429) {
+      if (i < retries) { await sleep(2000); continue; }
+      throw new Error(data.error?.message || "Rate limited");
+    }
+    if (!res.ok) throw new Error(data.error?.message || `Gemini error ${res.status}`);
+    return data;
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
@@ -11,20 +31,14 @@ export default async function handler(req, res) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY not configured on server" });
 
-  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash-lite:generateContent?key=${apiKey}`;
-
   const filePart = { inlineData: { mimeType: mediaType, data: base64 } };
 
   try {
-    // Extract text fields
-    const response = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            filePart,
-            { text: `Extract the following fields from this payslip. Return ONLY a JSON object with these keys (use empty string if not found):
+    const data = await gemini(apiKey, {
+      contents: [{
+        parts: [
+          filePart,
+          { text: `Extract the following fields from this payslip. Return ONLY a JSON object with these keys (use empty string if not found):
 {
   "employeeName": "",
   "designation": "",
@@ -40,39 +54,26 @@ export default async function handler(req, res) {
   "logoPosition": "top-left, top-center, or top-right. Empty if no logo."
 }
 Return ONLY the JSON, no other text.` }
-          ]
-        }],
-        generationConfig: { maxOutputTokens: 1000, temperature: 0 },
-      })
+        ]
+      }],
+      generationConfig: { maxOutputTokens: 1000, temperature: 0 },
     });
 
-    const data = await response.json();
-    if (!response.ok) {
-      return res.status(response.status).json({ error: data.error?.message || `Gemini error ${response.status}` });
-    }
-
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const clean = text.replace(/```json|```/g, "").trim();
-    const fields = JSON.parse(clean);
+    const fields = JSON.parse(text.replace(/```json|```/g, "").trim());
 
-    // If image with logo, get bounding box for cropping
     let logoBbox = null;
     if (mediaType.startsWith("image/") && fields.hasLogo) {
       try {
-        const logoRes = await fetch(GEMINI_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{
-              parts: [
-                filePart,
-                { text: `Give me the bounding box of JUST the company logo as percentages of image size. Return ONLY JSON: {"x":0,"y":0,"width":20,"height":10} where x,y are top-left %, width/height are %. Return ONLY JSON.` }
-              ]
-            }],
-            generationConfig: { maxOutputTokens: 200, temperature: 0 },
-          })
+        const logoData = await gemini(apiKey, {
+          contents: [{
+            parts: [
+              filePart,
+              { text: `Give me the bounding box of JUST the company logo as percentages of image size. Return ONLY JSON: {"x":0,"y":0,"width":20,"height":10} where x,y are top-left %, width/height are %. Return ONLY JSON.` }
+            ]
+          }],
+          generationConfig: { maxOutputTokens: 200, temperature: 0 },
         });
-        const logoData = await logoRes.json();
         const logoText = logoData.candidates?.[0]?.content?.parts?.[0]?.text || "";
         logoBbox = JSON.parse(logoText.replace(/```json|```/g, "").trim());
       } catch (_) {}
