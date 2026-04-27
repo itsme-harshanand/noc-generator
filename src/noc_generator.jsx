@@ -924,27 +924,55 @@ function FormPanel({ form, setForm }) {
       const { fields, logoBbox } = data;
       setParsedFields(fields);
 
-      // Logo priority: 1) crop from payslip image  2) website favicon  3) generated
+      // Logo priority: 1) crop from payslip  2) website favicon  3) generated
+      const cropLogo = (imgCanvas, W, H) => {
+        const pad = 5;
+        const sx = (logoBbox.x / 100) * W;
+        const sy = (logoBbox.y / 100) * H;
+        const sw = (logoBbox.width / 100) * W;
+        const sh = (logoBbox.height / 100) * H;
+        const out = document.createElement("canvas");
+        out.width = sw + pad * 2;
+        out.height = sh + pad * 2;
+        const ctx = out.getContext("2d");
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, out.width, out.height);
+        ctx.drawImage(imgCanvas, sx - pad, sy - pad, sw + pad * 2, sh + pad * 2, 0, 0, out.width, out.height);
+        setForm(f => ({ ...f, uploadedLogo: out.toDataURL("image/png") }));
+        setLogoSource("payslip");
+      };
+
       if (logoBbox && logoBbox.width > 0 && mediaType.startsWith("image/")) {
-        // Extract logo from image payslip
         const img = new Image();
-        img.onload = () => {
-          const canvas = document.createElement("canvas");
-          const pad = 5;
-          const sx = (logoBbox.x / 100) * img.width;
-          const sy = (logoBbox.y / 100) * img.height;
-          const sw = (logoBbox.width / 100) * img.width;
-          const sh = (logoBbox.height / 100) * img.height;
-          canvas.width = sw + pad * 2;
-          canvas.height = sh + pad * 2;
-          const ctx = canvas.getContext("2d");
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, sx - pad, sy - pad, sw + pad * 2, sh + pad * 2, 0, 0, canvas.width, canvas.height);
-          setForm(f => ({ ...f, uploadedLogo: canvas.toDataURL("image/png") }));
-          setLogoSource("payslip");
-        };
+        img.onload = () => cropLogo(img, img.width, img.height);
         img.src = `data:${mediaType};base64,${base64}`;
+      } else if (logoBbox && logoBbox.width > 0 && mediaType === "application/pdf") {
+        // Render first page of PDF with pdf.js, then crop logo
+        (async () => {
+          try {
+            if (!window.pdfjsLib) {
+              await new Promise((res, rej) => {
+                const s = document.createElement("script");
+                s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+                s.onload = res; s.onerror = rej;
+                document.head.appendChild(s);
+              });
+              window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+                "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+            }
+            const pdfData = Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+            const pdf = await window.pdfjsLib.getDocument({ data: pdfData }).promise;
+            const page = await pdf.getPage(1);
+            const viewport = page.getViewport({ scale: 2 });
+            const canvas = document.createElement("canvas");
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            await page.render({ canvasContext: canvas.getContext("2d"), viewport }).promise;
+            cropLogo(canvas, canvas.width, canvas.height);
+          } catch (_) {
+            setLogoSource(fields.companyWebsite ? "website" : "generated");
+          }
+        })();
       } else if (fields.companyWebsite) {
         // Will use website favicon via SmartLogo
         setLogoSource("website");

@@ -76,13 +76,13 @@ Use empty string for missing text fields. hasLogo must be true or false (boolean
     const fields = parseJSON(text);
 
     let logoBbox = null;
-    if (mediaType.startsWith("image/") && fields.hasLogo) {
+    if (fields.hasLogo) {
       try {
         const logoData = await gemini(apiKey, {
           contents: [{
             parts: [
               filePart,
-              { text: `Return the bounding box of the company logo as JSON: {"x":5,"y":2,"width":18,"height":8} where values are percentages of image dimensions. Return ONLY the JSON object.` }
+              { text: `Return the bounding box of the company logo on the FIRST PAGE as JSON: {"x":5,"y":2,"width":18,"height":8} where values are percentages of page/image width and height. Return ONLY the JSON object.` }
             ]
           }],
           generationConfig: { maxOutputTokens: 200, temperature: 0 },
