@@ -64,7 +64,7 @@ export default async function handler(req, res) {
 Use empty string for missing text fields. hasLogo must be true or false (boolean). Return ONLY the JSON object, no explanation.` }
         ]
       }],
-      generationConfig: { maxOutputTokens: 1000, temperature: 0 },
+      generationConfig: { maxOutputTokens: 2048, temperature: 0 },
     });
 
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
