@@ -888,6 +888,41 @@ const inputStyle = { width: "100%", padding: "7px 10px", border: "1px solid #d1d
 const selectStyle = { ...inputStyle, appearance: "auto" };
 const checkStyle = { display: "flex", alignItems: "center", gap: 8, marginBottom: 8, fontSize: 13, cursor: "pointer", color: "#374151" };
 
+// Generate candidate domains from a company name
+function domainCandidates(companyName) {
+  const stop = /\b(pvt|private|ltd|limited|pte|inc|corp|llc|llp|co|the|of|and|for|centre|center|training|computer|institute|services|solutions|technologies|tech|systems|enterprises|industries|group|netcafe|cafe|net)\b/gi;
+  const words = companyName.replace(stop, " ").replace(/[^a-z0-9\s]/gi, " ").trim().split(/\s+/).filter(Boolean);
+  const candidates = new Set();
+  if (words.length === 0) return [];
+  candidates.add(words.join("").toLowerCase());
+  if (words.length >= 2) candidates.add((words[0] + words[1]).toLowerCase());
+  candidates.add(words[0].toLowerCase());
+  if (words.length >= 2) candidates.add(words.map(w => w[0]).join("").toLowerCase());
+  const tlds = [".com", ".in", ".co.in", ".net", ".org"];
+  const domains = [];
+  for (const c of candidates) if (c.length >= 3) for (const t of tlds) domains.push(c + t);
+  return domains;
+}
+
+async function tryFetchLogo(domain) {
+  const sources = [
+    `https://img.logo.dev/${domain}?token=pk_anonymous&size=200&format=png`,
+    `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
+    `https://t1.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=128`,
+  ];
+  for (const src of sources) {
+    const ok = await new Promise(res => {
+      const img = new Image();
+      img.onload = () => res(img.naturalWidth >= 32);
+      img.onerror = () => res(false);
+      setTimeout(() => res(false), 3000);
+      img.src = src;
+    });
+    if (ok) return domain;
+  }
+  return null;
+}
+
 function FormPanel({ form, setForm }) {
   const u = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.type === "checkbox" ? e.target.checked : e.target.value }));
   const [section, setSection] = useState("payslip");
@@ -974,11 +1009,22 @@ function FormPanel({ form, setForm }) {
           }
         })();
       } else if (fields.companyWebsite) {
-        // Will use website favicon via SmartLogo
         setLogoSource("website");
       } else {
-        // Will use auto-generated logo via SmartLogo
-        setLogoSource("generated");
+        // Try domain patterns from company name
+        setLogoSource("searching");
+        const domains = domainCandidates(fields.companyName || "");
+        let found = null;
+        for (const d of domains) {
+          found = await tryFetchLogo(d);
+          if (found) break;
+        }
+        if (found) {
+          setForm(f => ({ ...f, companyWebsite: found }));
+          setLogoSource("website");
+        } else {
+          setLogoSource("manual");
+        }
       }
 
       // Auto-fill form fields
@@ -1046,11 +1092,34 @@ function FormPanel({ form, setForm }) {
           {payslipStatus === "done" && parsedFields && (
             <div style={{ padding: "12px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, fontSize: 12, color: "#166534" }}>
               <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 13 }}>✅ Parsed successfully!</div>
-              <div style={{ marginBottom: 8, fontSize: 12, color: "#0369a1", background: "#e0f2fe", borderRadius: 5, padding: "4px 8px", display: "inline-block" }}>
-                {logoSource === "payslip" && "🖼 Logo extracted from payslip"}
-                {logoSource === "website" && "🌐 Logo fetched from company website"}
-                {logoSource === "generated" && "✨ Logo auto-generated"}
-              </div>
+              {logoSource === "searching" && (
+                <div style={{ marginBottom: 8, fontSize: 12, color: "#92400e", background: "#fffbeb", borderRadius: 5, padding: "4px 8px" }}>
+                  🔍 Searching for company logo...
+                </div>
+              )}
+              {logoSource === "payslip" && (
+                <div style={{ marginBottom: 8, fontSize: 12, color: "#0369a1", background: "#e0f2fe", borderRadius: 5, padding: "4px 8px" }}>
+                  🖼 Logo extracted from payslip
+                </div>
+              )}
+              {logoSource === "website" && (
+                <div style={{ marginBottom: 8, fontSize: 12, color: "#0369a1", background: "#e0f2fe", borderRadius: 5, padding: "4px 8px" }}>
+                  🌐 Logo fetched from company website
+                </div>
+              )}
+              {logoSource === "generated" && (
+                <div style={{ marginBottom: 8, fontSize: 12, color: "#6b7280", background: "#f3f4f6", borderRadius: 5, padding: "4px 8px" }}>
+                  ✨ Logo auto-generated from initials
+                </div>
+              )}
+              {logoSource === "manual" && (
+                <div style={{ marginBottom: 8, fontSize: 12, color: "#92400e", background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 6, padding: "8px 10px" }}>
+                  ⚠️ Logo not found automatically. Please upload it manually —
+                  <span onClick={() => setSection("company")} style={{ color: "#1d4ed8", fontWeight: 700, cursor: "pointer", marginLeft: 4 }}>
+                    go to Company tab → Upload Logo
+                  </span>
+                </div>
+              )}
               {Object.entries(parsedFields).filter(([k, v]) => v && k !== "hasLogo" && k !== "logoPosition").map(([k, v]) => (
                 <div key={k} style={{ marginBottom: 2 }}><span style={{ fontWeight: 600, color: "#374151" }}>{k}:</span> {String(v)}</div>
               ))}
