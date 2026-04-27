@@ -1,21 +1,31 @@
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+const MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.0-flash",
+  "gemini-2.0-flash-lite",
+];
+
 async function gemini(apiKey, body, retries = 2) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
-  for (let i = 0; i <= retries; i++) {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json();
-    if (res.status === 429) {
-      if (i < retries) { await sleep(2000); continue; }
-      throw new Error(data.error?.message || "Rate limited");
+  for (const model of MODELS) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    for (let i = 0; i <= retries; i++) {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (res.status === 429) {
+        if (i < retries) { await sleep(2000); continue; }
+        break; // try next model
+      }
+      if (res.status === 503 || res.status === 429) break; // try next model
+      if (!res.ok) throw new Error(data.error?.message || `Gemini error ${res.status}`);
+      return data;
     }
-    if (!res.ok) throw new Error(data.error?.message || `Gemini error ${res.status}`);
-    return data;
   }
+  throw new Error("All Gemini models are currently unavailable. Please try again in a moment.");
 }
 
 function parseJSON(text) {
