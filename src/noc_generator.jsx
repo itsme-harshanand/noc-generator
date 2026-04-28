@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { logoManager } from "./logo_library.js";
 
 // ─── PERSISTENCE (Fix #5: save form to localStorage) ─────
 
@@ -609,6 +610,7 @@ const defaultForm = {
   addressedTo: "generic",
   customAddressee: "",
   uploadedLogo: "",
+  logoMode: "auto", // "auto" | "text-only" | "skip"
 };
 
 function formatDate(dateStr) {
@@ -651,7 +653,16 @@ function NOCPreview({ form }) {
     boxShadow: "0 2px 20px rgba(0,0,0,0.12)",
   };
 
-  const logo = (w, h) => <SmartLogo companyName={form.companyName} website={form.companyWebsite} width={w || lw} height={h || lh} primaryColor={colors.primary} uploadedLogo={form.uploadedLogo} />;
+  const textOnlyLogo = (h) => (
+    <div style={{ fontFamily: "Georgia, 'Times New Roman', serif", fontWeight: 700, fontSize: Math.max(13, (h || lh) * 0.35) + "px", color: colors.primary, letterSpacing: "0.5px", lineHeight: 1.2, maxWidth: 220 }}>
+      {form.companyName}
+    </div>
+  );
+  const logo = (w, h) => {
+    if (form.logoMode === "skip") return null;
+    if (form.logoMode === "text-only") return textOnlyLogo(h);
+    return <SmartLogo companyName={form.companyName} website={form.companyWebsite} width={w || lw} height={h || lh} primaryColor={colors.primary} uploadedLogo={form.uploadedLogo} />;
+  };
 
   // ─── Signature + Stamp block (Fix #2 & #3) ───
 
@@ -1008,22 +1019,33 @@ function FormPanel({ form, setForm }) {
             setLogoSource(fields.companyWebsite ? "website" : "generated");
           }
         })();
-      } else if (fields.companyWebsite) {
-        setLogoSource("website");
       } else {
-        // Try domain patterns from company name
         setLogoSource("searching");
-        const domains = domainCandidates(fields.companyName || "");
-        let found = null;
-        for (const d of domains) {
-          found = await tryFetchLogo(d);
-          if (found) break;
-        }
-        if (found) {
-          setForm(f => ({ ...f, companyWebsite: found }));
+        const companyName = fields.companyName || "";
+
+        // 1. Check logo library (known companies)
+        const libResult = await logoManager.get_logo(companyName);
+        if (libResult) {
+          setForm(f => ({ ...f, uploadedLogo: libResult.url, logoMode: "auto" }));
+          setLogoSource("library");
+        } else if (fields.companyWebsite) {
+          // 2. Use website from payslip
           setLogoSource("website");
         } else {
-          setLogoSource("manual");
+          // 3. Try domain patterns from company name
+          const domains = domainCandidates(companyName);
+          let found = null;
+          for (const d of domains) {
+            found = await tryFetchLogo(d);
+            if (found) break;
+          }
+          if (found) {
+            setForm(f => ({ ...f, companyWebsite: found }));
+            setLogoSource("website");
+          } else {
+            // 4. Prompt user
+            setLogoSource("manual");
+          }
         }
       }
 
@@ -1093,31 +1115,45 @@ function FormPanel({ form, setForm }) {
             <div style={{ padding: "12px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: 8, fontSize: 12, color: "#166534" }}>
               <div style={{ fontWeight: 700, marginBottom: 6, fontSize: 13 }}>✅ Parsed successfully!</div>
               {logoSource === "searching" && (
-                <div style={{ marginBottom: 8, fontSize: 12, color: "#92400e", background: "#fffbeb", borderRadius: 5, padding: "4px 8px" }}>
-                  🔍 Searching for company logo...
+                <div style={{ marginBottom: 8, fontSize: 12, color: "#92400e", background: "#fffbeb", borderRadius: 5, padding: "6px 10px" }}>
+                  🔍 Searching logo library and web...
                 </div>
               )}
               {logoSource === "payslip" && (
-                <div style={{ marginBottom: 8, fontSize: 12, color: "#0369a1", background: "#e0f2fe", borderRadius: 5, padding: "4px 8px" }}>
+                <div style={{ marginBottom: 8, fontSize: 12, color: "#0369a1", background: "#e0f2fe", borderRadius: 5, padding: "6px 10px" }}>
                   🖼 Logo extracted from payslip
                 </div>
               )}
+              {logoSource === "library" && (
+                <div style={{ marginBottom: 8, fontSize: 12, color: "#166534", background: "#f0fdf4", borderRadius: 5, padding: "6px 10px" }}>
+                  📚 Logo matched from company library
+                </div>
+              )}
               {logoSource === "website" && (
-                <div style={{ marginBottom: 8, fontSize: 12, color: "#0369a1", background: "#e0f2fe", borderRadius: 5, padding: "4px 8px" }}>
+                <div style={{ marginBottom: 8, fontSize: 12, color: "#0369a1", background: "#e0f2fe", borderRadius: 5, padding: "6px 10px" }}>
                   🌐 Logo fetched from company website
                 </div>
               )}
               {logoSource === "generated" && (
-                <div style={{ marginBottom: 8, fontSize: 12, color: "#6b7280", background: "#f3f4f6", borderRadius: 5, padding: "4px 8px" }}>
+                <div style={{ marginBottom: 8, fontSize: 12, color: "#6b7280", background: "#f3f4f6", borderRadius: 5, padding: "6px 10px" }}>
                   ✨ Logo auto-generated from initials
                 </div>
               )}
               {logoSource === "manual" && (
-                <div style={{ marginBottom: 8, fontSize: 12, color: "#92400e", background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 6, padding: "8px 10px" }}>
-                  ⚠️ Logo not found automatically. Please upload it manually —
-                  <span onClick={() => setSection("company")} style={{ color: "#1d4ed8", fontWeight: 700, cursor: "pointer", marginLeft: 4 }}>
-                    go to Company tab → Upload Logo
-                  </span>
+                <div style={{ marginBottom: 8, fontSize: 13, background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, padding: "12px 14px" }}>
+                  <div style={{ fontWeight: 700, color: "#92400e", marginBottom: 8 }}>⚠️ Company logo not found in library.</div>
+                  <div style={{ color: "#78350f", marginBottom: 10, fontSize: 12 }}>Choose an option:</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <button onClick={() => setSection("company")} style={{ padding: "7px 12px", background: "#1e40af", color: "#fff", border: "none", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left" }}>
+                      1. Upload logo file → Company tab
+                    </button>
+                    <button onClick={() => setForm(f => ({ ...f, logoMode: "text-only" }))} style={{ padding: "7px 12px", background: "#f9fafb", color: "#374151", border: "1px solid #d1d5db", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left" }}>
+                      2. Use text-only header (recommended)
+                    </button>
+                    <button onClick={() => setForm(f => ({ ...f, logoMode: "skip" }))} style={{ padding: "7px 12px", background: "#f9fafb", color: "#6b7280", border: "1px solid #e5e7eb", borderRadius: 6, fontSize: 12, cursor: "pointer", textAlign: "left" }}>
+                      3. Skip logo
+                    </button>
+                  </div>
                 </div>
               )}
               {Object.entries(parsedFields).filter(([k, v]) => v && k !== "hasLogo" && k !== "logoPosition").map(([k, v]) => (
