@@ -52,10 +52,10 @@ const LOGO_PALETTES = [
   { bg: "#0b3d0b", fg: "#ffffff", accent: "#4caf50" },
 ];
 
-function GeneratedLogo({ companyName, width = 80, height = 50, primaryColor }) {
+function GeneratedLogo({ companyName, width = 80, height = 50, primaryColor, styleOverride = null }) {
   const initials = getInitials(companyName);
   const hash = hashStr(companyName);
-  const style = LOGO_STYLES[hash % LOGO_STYLES.length];
+  const style = LOGO_STYLES[styleOverride !== null ? styleOverride % LOGO_STYLES.length : hash % LOGO_STYLES.length];
   const palette = LOGO_PALETTES[hash % LOGO_PALETTES.length];
   const bg = primaryColor || palette.bg;
   const fg = "#ffffff";
@@ -139,7 +139,7 @@ function GeneratedLogo({ companyName, width = 80, height = 50, primaryColor }) {
   }
 }
 
-function SmartLogo({ companyName, website, width = 80, height = 50, primaryColor, uploadedLogo }) {
+function SmartLogo({ companyName, website, width = 80, height = 50, primaryColor, uploadedLogo, styleOverride = null }) {
   const [logoUrl, setLogoUrl] = useState(null);
   const [failed, setFailed] = useState(false);
 
@@ -168,8 +168,7 @@ function SmartLogo({ companyName, website, width = 80, height = 50, primaryColor
 
   if (uploadedLogo) return <img src={uploadedLogo} alt={companyName} style={{ width, height, objectFit: "contain" }} />;
   if (logoUrl && !failed) return <img src={logoUrl} alt={companyName} style={{ width, height, objectFit: "contain" }} onError={() => { setFailed(true); setLogoUrl(null); }} />;
-  // Fix #1: Always fall back to generated logo
-  return <GeneratedLogo companyName={companyName} width={width} height={height} primaryColor={primaryColor} />;
+  return <GeneratedLogo companyName={companyName} width={width} height={height} primaryColor={primaryColor} styleOverride={styleOverride} />;
 }
 
 
@@ -661,6 +660,7 @@ const defaultForm = {
   customAddressee: "",
   uploadedLogo: "",
   logoMode: "auto", // "auto" | "text-only" | "skip"
+  logoStyleIndex: null, // null = hash-based auto, 0-7 = user-picked style
 };
 
 function formatDate(dateStr) {
@@ -711,7 +711,7 @@ function NOCPreview({ form }) {
   const logo = (w, h) => {
     if (form.logoMode === "skip") return null;
     if (form.logoMode === "text-only") return textOnlyLogo(h);
-    return <SmartLogo companyName={form.companyName} website={form.companyWebsite} width={w || lw} height={h || lh} primaryColor={colors.primary} uploadedLogo={form.uploadedLogo} />;
+    return <SmartLogo companyName={form.companyName} website={form.companyWebsite} width={w || lw} height={h || lh} primaryColor={colors.primary} uploadedLogo={form.uploadedLogo} styleOverride={form.logoStyleIndex} />;
   };
 
   // ─── Signature + Stamp block (Fix #2 & #3) ───
@@ -1233,7 +1233,7 @@ function FormPanel({ form, setForm }) {
                 Upload Logo
                 <input type="file" accept="image/*" style={{ display: "none" }} onChange={(e) => {
                   const file = e.target.files[0];
-                  if (file) { const reader = new FileReader(); reader.onload = (ev) => setForm(f => ({ ...f, uploadedLogo: ev.target.result })); reader.readAsDataURL(file); }
+                  if (file) { const reader = new FileReader(); reader.onload = (ev) => setForm(f => ({ ...f, uploadedLogo: ev.target.result, logoMode: "auto" })); reader.readAsDataURL(file); }
                 }} />
               </label>
               {form.uploadedLogo && (
@@ -1244,6 +1244,22 @@ function FormPanel({ form, setForm }) {
               )}
             </div>
           </Field>
+          {!form.uploadedLogo && (
+            <Field label="Auto-Generated Logo Style" hint="Pick a style or reshuffle. Only applies when no logo is uploaded or fetched.">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 6, marginBottom: 8 }}>
+                {LOGO_STYLES.map((_, i) => (
+                  <div key={i} onClick={() => setForm(f => ({ ...f, logoStyleIndex: i, logoMode: "auto", uploadedLogo: "" }))}
+                    style={{ cursor: "pointer", border: form.logoStyleIndex === i ? "2px solid #1e40af" : "2px solid #e5e7eb", borderRadius: 8, padding: 4, background: form.logoStyleIndex === i ? "#eff6ff" : "#fff", transition: "all 0.15s" }}>
+                    <GeneratedLogo companyName={form.companyName || "AC"} width={60} height={36} styleOverride={i} />
+                  </div>
+                ))}
+              </div>
+              <button onClick={() => setForm(f => ({ ...f, logoStyleIndex: Math.floor(Math.random() * LOGO_STYLES.length), logoMode: "auto", uploadedLogo: "" }))}
+                style={{ width: "100%", padding: "7px 0", background: "#f1f5f9", border: "1px solid #cbd5e1", borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: "pointer", color: "#374151" }}>
+                🔀 Reshuffle
+              </button>
+            </Field>
+          )}
           <Field label={`Logo Size: ${form.logoWidth}×${form.logoHeight}px`}>
             <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
               <div style={{ flex: 1 }}>
