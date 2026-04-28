@@ -58,34 +58,84 @@ function GeneratedLogo({ companyName, width = 80, height = 50, primaryColor }) {
   const style = LOGO_STYLES[hash % LOGO_STYLES.length];
   const palette = LOGO_PALETTES[hash % LOGO_PALETTES.length];
   const bg = primaryColor || palette.bg;
-  const fg = palette.fg;
+  const fg = "#ffffff";
   const accent = palette.accent;
-  const sz = Math.min(width, height);
+
+  // Fixed large internal coordinate system — SVG scales perfectly to any display size
+  const W = 240, H = 100, CX = 120, CY = 50;
+  const SZ = H; // square reference size
+
+  const txt = (x, y, size, weight, color, family, content, extra = {}) => (
+    <text x={x} y={y} textAnchor="middle" dominantBaseline="central"
+      fill={color} fontSize={size} fontWeight={weight}
+      fontFamily={family} {...extra}>{content}</text>
+  );
 
   switch (style) {
     case "circle-initials":
-      return (<svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}><circle cx={width/2} cy={height/2} r={sz/2 - 2} fill={bg} /><text x={width/2} y={height/2 + 1} textAnchor="middle" dominantBaseline="central" fill={fg} fontSize={sz * 0.35} fontWeight="800" fontFamily="Arial, sans-serif">{initials}</text></svg>);
+      return (<svg width={width} height={height} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        <circle cx={CX} cy={CY} r={46} fill={bg} />
+        {txt(CX, CY + 1, 38, "900", fg, "Arial, sans-serif", initials)}
+      </svg>);
+
     case "square-initials":
-      return (<svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}><rect x={(width-sz)/2 + 2} y={2} width={sz - 4} height={height - 4} fill={bg} /><text x={width/2} y={height/2 + 1} textAnchor="middle" dominantBaseline="central" fill={fg} fontSize={sz * 0.35} fontWeight="800" fontFamily="Arial, sans-serif">{initials}</text></svg>);
+      return (<svg width={width} height={height} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        <rect x={CX - 46} y={CY - 46} width={92} height={92} fill={bg} />
+        {txt(CX, CY + 1, 38, "900", fg, "Arial, sans-serif", initials)}
+      </svg>);
+
     case "rounded-initials":
-      return (<svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}><rect x={(width-sz)/2 + 2} y={2} width={sz - 4} height={height - 4} rx={8} fill={bg} /><text x={width/2} y={height/2 + 1} textAnchor="middle" dominantBaseline="central" fill={fg} fontSize={sz * 0.35} fontWeight="700" fontFamily="Georgia, serif">{initials}</text></svg>);
-    case "shield":
-      return (<svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}><path d={`M${width/2} 2 L${width - 4} ${height * 0.3} L${width - 4} ${height * 0.65} Q${width/2} ${height + 2} ${4} ${height * 0.65} L4 ${height * 0.3} Z`} fill={bg} /><text x={width/2} y={height/2 + 2} textAnchor="middle" dominantBaseline="central" fill={fg} fontSize={sz * 0.3} fontWeight="800" fontFamily="Arial, sans-serif">{initials}</text></svg>);
+      return (<svg width={width} height={height} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        <rect x={CX - 46} y={CY - 46} width={92} height={92} rx={14} fill={bg} />
+        {txt(CX, CY + 1, 36, "800", fg, "Georgia, serif", initials)}
+      </svg>);
+
+    case "shield": {
+      const sp = `M${CX} 4 L${CX + 44} ${H * 0.28} L${CX + 44} ${H * 0.66} Q${CX} ${H + 4} ${CX - 44} ${H * 0.66} L${CX - 44} ${H * 0.28} Z`;
+      return (<svg width={width} height={height} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        <path d={sp} fill={bg} />
+        {txt(CX, CY + 2, 32, "900", fg, "Arial, sans-serif", initials)}
+      </svg>);
+    }
+
     case "hexagon": {
-      const cx = width / 2, cy = height / 2, r = sz / 2 - 3;
-      const pts = Array.from({ length: 6 }, (_, i) => { const a = (Math.PI / 3) * i - Math.PI / 2; return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`; }).join(" ");
-      return (<svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}><polygon points={pts} fill={bg} /><text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="central" fill={fg} fontSize={sz * 0.32} fontWeight="800" fontFamily="Arial, sans-serif">{initials}</text></svg>);
+      const r = 46;
+      const pts = Array.from({ length: 6 }, (_, i) => { const a = (Math.PI / 3) * i - Math.PI / 2; return `${CX + r * Math.cos(a)},${CY + r * Math.sin(a)}`; }).join(" ");
+      return (<svg width={width} height={height} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        <polygon points={pts} fill={bg} />
+        {txt(CX, CY + 1, 34, "900", fg, "Arial, sans-serif", initials)}
+      </svg>);
     }
+
     case "underline-bold":
-      return (<svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}><text x={width/2} y={height/2 - 2} textAnchor="middle" dominantBaseline="central" fill={bg} fontSize={sz * 0.42} fontWeight="900" fontFamily="Arial, sans-serif" letterSpacing="3">{initials}</text><rect x={(width - sz * 0.7)/2} y={height/2 + sz * 0.2} width={sz * 0.7} height={3} fill={accent} rx={1} /></svg>);
+      return (<svg width={width} height={height} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        <rect x={0} y={0} width={W} height={H} fill="#ffffff" />
+        {txt(CX, CY - 8, 46, "900", bg, "Arial, sans-serif", initials, { letterSpacing: "6" })}
+        <rect x={CX - 36} y={CY + 28} width={72} height={5} fill={accent} rx={2} />
+      </svg>);
+
     case "stacked": {
-      const firstName = companyName.replace(/\b(Pvt|Private|Ltd|Limited|Pte|Inc|Corp|LLC|LLP|Co|The)\b\.?/gi, "").trim().split(/\s+/)[0] || "CO";
-      return (<svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}><rect x={2} y={2} width={width - 4} height={height - 4} fill={bg} rx={4} /><text x={width/2} y={height * 0.42} textAnchor="middle" dominantBaseline="central" fill={fg} fontSize={sz * 0.26} fontWeight="900" fontFamily="Arial, sans-serif" letterSpacing="2">{firstName.substring(0, 6).toUpperCase()}</text><rect x={width * 0.2} y={height * 0.58} width={width * 0.6} height={1.5} fill={accent} /></svg>);
+      const word = companyName.replace(/\b(Pvt|Private|Ltd|Limited|Pte|Inc|Corp|LLC|LLP|Co|The)\b\.?/gi, "").trim().split(/\s+/)[0] || "CO";
+      return (<svg width={width} height={height} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        <rect x={2} y={2} width={W - 4} height={H - 4} fill={bg} rx={8} />
+        {txt(CX, CY - 6, 32, "900", fg, "Arial, sans-serif", word.substring(0, 6).toUpperCase(), { letterSpacing: "4" })}
+        <rect x={CX - 40} y={CY + 18} width={80} height={4} fill={accent} rx={2} />
+      </svg>);
     }
-    case "diamond":
-      return (<svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}><polygon points={`${width/2},3 ${width/2 + sz/2 - 4},${height/2} ${width/2},${height - 3} ${width/2 - sz/2 + 4},${height/2}`} fill={bg} /><text x={width/2} y={height/2 + 1} textAnchor="middle" dominantBaseline="central" fill={fg} fontSize={sz * 0.28} fontWeight="800" fontFamily="Arial, sans-serif">{initials}</text></svg>);
+
+    case "diamond": {
+      const dp = `${CX},4 ${CX + 44},${CY} ${CX},${H - 4} ${CX - 44},${CY}`;
+      return (<svg width={width} height={height} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        <polygon points={dp} fill={bg} />
+        {txt(CX, CY + 1, 30, "900", fg, "Arial, sans-serif", initials)}
+      </svg>);
+    }
+
     default:
-      return (<svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}><circle cx={width/2} cy={height/2} r={sz/2 - 2} fill={bg} /><text x={width/2} y={height/2 + 1} textAnchor="middle" dominantBaseline="central" fill={fg} fontSize={sz * 0.35} fontWeight="800" fontFamily="Arial, sans-serif">{initials}</text></svg>);
+      return (<svg width={width} height={height} viewBox={`0 0 ${W} ${H}`} style={{ display: "block" }}>
+        <circle cx={CX} cy={CY} r={46} fill={bg} />
+        {txt(CX, CY + 1, 38, "900", fg, "Arial, sans-serif", initials)}
+      </svg>);
   }
 }
 
